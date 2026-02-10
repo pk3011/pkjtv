@@ -8,14 +8,14 @@
 #KODIPROP:inputstream.adaptive.license_key=810f0869e10c537891203cc70315dd6d:b8f7d22abf86cf12444a848ed5dbec13
 #EXTVLCOPT:http-user-agent=Exoplayer
 #EXTHTTP:{"cookie":"__hdnea__=st=1770710513~exp=1770796913~acl=/*~hmac=8430aabc57bcd4e1fcb6c7784bc72211b9833c7f9a3616fc7f40062659534b8c"}
-https://jiotvmblive.cdn.jio.com/bpk-tv/CNBC_Tv18_Prime_HD_BTS/output/index.mpd?__hdnea__=st=1770710513~exp=1770796913~acl=/*~hmac=8430aabc57bcd4e1fcb6c7784bc72211b9833c7f9a3616fc7f40062659534b8c
+https://jiotvmblive.cdn.jio.com/bpk-tv/CNBCTv18Prime_BTS/output/index.mpd?__hdnea__=st=1770710513~exp=1770796913~acl=/*~hmac=8430aabc57bcd4e1fcb6c7784bc72211b9833c7f9a3616fc7f40062659534b8c
 
 #EXTINF:-1 tvg-id="1003" group-title="Business News" tvg-logo="https://jiotv.catchup.cdn.jio.com/dare_images/images/CNBC_Awaaz.png",CNBC Awaaz
 #KODIPROP:inputstream.adaptive.license_type=clearkey
 #KODIPROP:inputstream.adaptive.license_key=4b6fa3ba1098544089226b314f624e75:8fd6f93bcc1ec1fdfff2ba5f7fce4955
 #EXTVLCOPT:http-user-agent=Exoplayer
 #EXTHTTP:{"cookie":"__hdnea__=st=1770710513~exp=1770796913~acl=/*~hmac=8430aabc57bcd4e1fcb6c7784bc72211b9833c7f9a3616fc7f40062659534b8c"}
-https://jiotvmblive.cdn.jio.com/bpk-tv/CNBC_Awaaz_BTS/output/index.mpd?__hdnea__=st=1770710513~exp=1770796913~acl=/*~hmac=8430aabc57bcd4e1fcb6c7784bc72211b9833c7f9a3616fc7f40062659534b8c
+https://jiotvmblive.cdn.jio.com/bpk-tv/CNBCAwaaz_BTS/output/index.mpd?__hdnea__=st=1770710513~exp=1770796913~acl=/*~hmac=8430aabc57bcd4e1fcb6c7784bc72211b9833c7f9a3616fc7f40062659534b8c
 
 #EXTINF:-1 tvg-id="1004" group-title="Business News" tvg-logo="https://jiotv.catchup.cdn.jio.com/dare_images/images/ET_Now.png",ET Now
 #KODIPROP:inputstream.adaptive.license_type=clearkey
