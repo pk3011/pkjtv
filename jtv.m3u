@@ -8,7 +8,7 @@
 #KODIPROP:inputstream.adaptive.license_key=810f0869e10c537891203cc70315dd6d:b8f7d22abf86cf12444a848ed5dbec13
 #EXTVLCOPT:http-user-agent=Exoplayer
 #EXTHTTP:{"cookie":"__hdnea__=st=1770710513~exp=1770796913~acl=/*~hmac=8430aabc57bcd4e1fcb6c7784bc72211b9833c7f9a3616fc7f40062659534b8c"}
-https://jiotvmblive.cdn.jio.com/bpk-tv/CNBCTv18Prime_BTS/output/index.mpd?__hdnea__=st=1770710513~exp=1770796913~acl=/*~hmac=8430aabc57bcd4e1fcb6c7784bc72211b9833c7f9a3616fc7f40062659534b8c
+https://jiotvmblive.cdn.jio.com/bpk-tv/CNBCTv18PrimeHD_BTS/output/index.mpd?__hdnea__=st=1770710513~exp=1770796913~acl=/*~hmac=8430aabc57bcd4e1fcb6c7784bc72211b9833c7f9a3616fc7f40062659534b8c
 
 #EXTINF:-1 tvg-id="1003" group-title="Business News" tvg-logo="https://jiotv.catchup.cdn.jio.com/dare_images/images/CNBC_Awaaz.png",CNBC Awaaz
 #KODIPROP:inputstream.adaptive.license_type=clearkey
