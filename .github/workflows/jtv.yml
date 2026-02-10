@@ -1,8 +1,13 @@
 name: Auto Update JioTV Cookie
 
+
+permissions:
+  contents: write
+
 on:
+  
   schedule:
-    - cron: "32 16 * * *"   # 10:02 PM IST
+    - cron: "32 16 * * *"
   workflow_dispatch:
 
 jobs:
@@ -13,28 +18,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Fetch cookie from API (secret)
+      - name: Fetch cookie from API (GitHub Secret)
         run: |
-          COOKIE=$(curl -s "${{ secrets.COOKIE_API_URL }}" | jq -r '.[0].cookie')
+          set -e
+
+          COOKIE=$(curl -fsSL "${{ secrets.COOKIE_API_URL }}" | jq -r '.[0].cookie')
+
+          if [ -z "$COOKIE" ] || [ "$COOKIE" = "null" ]; then
+            echo "❌ Cookie fetch failed"
+            exit 1
+          fi
+
           echo "COOKIE=$COOKIE" >> $GITHUB_ENV
 
       - name: Update cookie in jtv.m3u
         run: |
-          echo "Updating cookies in jtv.m3u..."
+          set -e
 
-          # Replace cookie inside #EXTHTTP
+          if [ ! -f "jtv.m3u" ]; then
+            echo "❌ jtv.m3u not found"
+            exit 1
+          fi
+
+          echo "🔁 Updating EXTHTTP cookies..."
           sed -i 's#"cookie":"__hdnea__=[^"]*"#"cookie":"'"$COOKIE"'"#g' jtv.m3u
 
-          # Replace token inside MPD URLs
+          echo "🔁 Updating MPD URL tokens..."
           sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE"'#g' jtv.m3u
 
-      - name: Commit & Push Changes
+      - name: Commit & Push changes
         run: |
+          set -e
+
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
           if git diff --quiet; then
-            echo "No changes detected"
+            echo "ℹ️ No changes detected"
             exit 0
           fi
 
