@@ -1,0 +1,43 @@
+name: Auto Update JioTV Cookie
+
+on:
+  schedule:
+    - cron: "32 16 * * *"   # 10:02 PM IST
+  workflow_dispatch:
+
+jobs:
+  update-cookie:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch cookie from API (secret)
+        run: |
+          COOKIE=$(curl -s "${{ secrets.COOKIE_API_URL }}" | jq -r '.[0].cookie')
+          echo "COOKIE=$COOKIE" >> $GITHUB_ENV
+
+      - name: Update cookie in jtv.m3u
+        run: |
+          echo "Updating cookies in jtv.m3u..."
+
+          # Replace cookie inside #EXTHTTP
+          sed -i 's#"cookie":"__hdnea__=[^"]*"#"cookie":"'"$COOKIE"'"#g' jtv.m3u
+
+          # Replace token inside MPD URLs
+          sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE"'#g' jtv.m3u
+
+      - name: Commit & Push Changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          if git diff --quiet; then
+            echo "No changes detected"
+            exit 0
+          fi
+
+          git add jtv.m3u
+          git commit -m "Auto update JioTV cookie"
+          git push
