@@ -1,11 +1,9 @@
 name: Auto Update JioTV Cookie
 
-
 permissions:
   contents: write
 
 on:
-  
   schedule:
     - cron: "32 16 * * *"
   workflow_dispatch:
@@ -22,14 +20,18 @@ jobs:
         run: |
           set -e
 
-          COOKIE=$(curl -fsSL "${{ secrets.COOKIE_API_URL }}" | jq -r '.[0].cookie')
+          FULL_COOKIE=$(curl -fsSL "${{ secrets.COOKIE_API_URL }}" | jq -r '.[0].cookie')
 
-          if [ -z "$COOKIE" ] || [ "$COOKIE" = "null" ]; then
+          if [ -z "$FULL_COOKIE" ] || [ "$FULL_COOKIE" = "null" ]; then
             echo "❌ Cookie fetch failed"
             exit 1
           fi
 
-          echo "COOKIE=$COOKIE" >> $GITHUB_ENV
+          # Remove "__hdnea__=" prefix for URL usage
+          COOKIE_VALUE="${FULL_COOKIE#__hdnea__=}"
+
+          echo "FULL_COOKIE=$FULL_COOKIE" >> $GITHUB_ENV
+          echo "COOKIE_VALUE=$COOKIE_VALUE" >> $GITHUB_ENV
 
       - name: Update cookie in jtv.m3u
         run: |
@@ -41,10 +43,10 @@ jobs:
           fi
 
           echo "🔁 Updating EXTHTTP cookies..."
-          sed -i 's#"cookie":"__hdnea__=[^"]*"#"cookie":"'"$COOKIE"'"#g' jtv.m3u
+          sed -i 's#"cookie":"__hdnea__=[^"]*"#"cookie":"'"$FULL_COOKIE"'"#g' jtv.m3u
 
-          echo "🔁 Updating MPD URL tokens..."
-          sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE"'#g' jtv.m3u
+          echo "🔁 Updating MPD URL hdnea token..."
+          sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE_VALUE"'#g' jtv.m3u
 
       - name: Commit & Push changes
         run: |
