@@ -9,8 +9,8 @@ on:
     - cron: '31 1 * * *'
     # 15:01 IST = 09:31 UTC
     - cron: '31 9 * * *'
-    # 22:01 IST = 16:31 UTC
-    - cron: '31 16 * * *'
+    # 23:01 IST = 17:31 UTC
+    - cron: '31 17 * * *'
   workflow_dispatch:
 
 jobs:
