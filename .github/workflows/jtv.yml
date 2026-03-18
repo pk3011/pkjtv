@@ -5,12 +5,7 @@ permissions:
 
 on:
   schedule:
-    # 07:01 IST = 01:31 UTC
-    - cron: '31 1 * * *'
-    # 15:01 IST = 09:31 UTC
-    - cron: '31 9 * * *'
-    # 23:01 IST = 17:31 UTC
-    - cron: '31 17 * * *'
+    - cron: '0 */4 * * *'
   workflow_dispatch:
 
 jobs:
