@@ -1,6 +1,4 @@
 #EXTM3U
-#EXTINF:-1 tvg-id="sf-top" tvg-name="Join Telegram: @streamstartv" tvg-logo="https://i.ibb.co/p67zjNDb/Install-Now-Net-X-Player.gif" group-logo="https://i.ibb.co/p67zjNDb/Install-Now-Net-X-Player.gif" group-title="Join Telegram: @streamstartv" , Install NetX Player
-https://i.ibb.co/p67zjNDb/Install-Now-Net-X-Player.gif
 #EXTINF:-1 tvg-id="1368" tvg-language="Hindi" group-title="Entertainment" tvg-logo="https://jiotv.catchup.cdn.jio.com/dare_images/images/Colors_SD.png",Colors SD
 #KODIPROP:inputstream.adaptive.license_type=clearkey
 #KODIPROP:inputstream.adaptive.license_key=5727d2eea91255a3abcad8bf6e97cee6:66e77c7cf5c7f654c68f05455f44fea0
