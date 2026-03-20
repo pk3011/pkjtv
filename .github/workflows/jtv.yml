@@ -33,20 +33,20 @@ jobs:
           echo "FULL_COOKIE=$FULL_COOKIE" >> $GITHUB_ENV
           echo "COOKIE_VALUE=$COOKIE_VALUE" >> $GITHUB_ENV
 
-      - name: Update cookie in jtv.m3u
+      - name: Update cookie in pjtv.m3u
         run: |
           set -e
 
-          if [ ! -f "jtv.m3u" ]; then
-            echo "❌ jtv.m3u not found"
+          if [ ! -f "pjtv.m3u" ]; then
+            echo "❌ pjtv.m3u not found"
             exit 1
           fi
 
           echo "🔁 Updating EXTHTTP cookies..."
-          sed -i 's#"cookie":"__hdnea__=[^"]*"#"cookie":"'"$FULL_COOKIE"'"#g' jtv.m3u
+          sed -i 's#"cookie":"__hdnea__=[^"]*"#"cookie":"'"$FULL_COOKIE"'"#g' pjtv.m3u
 
           echo "🔁 Updating MPD URL hdnea token..."
-          sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE_VALUE"'#g' jtv.m3u
+          sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE_VALUE"'#g' pjtv.m3u
 
       - name: Commit & Push changes
         run: |
@@ -60,6 +60,6 @@ jobs:
             exit 0
           fi
 
-          git add jtv.m3u
+          git add pjtv.m3u
           git commit -m "Auto update JioTV cookie"
           git push
