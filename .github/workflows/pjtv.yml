@@ -1,4 +1,4 @@
-name: Auto Update JioTV Cookie Gist
+name: Auto Update JioTV Cookie
 
 on:
   schedule:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository (only for workflow runtime)
+      - name: Checkout (for runtime only)
         uses: actions/checkout@v4
 
       - name: Fetch cookie from API
@@ -33,9 +33,10 @@ jobs:
         run: |
           set -e
 
-          curl -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
-               -o pjtv.m3u \
-               https://gist.githubusercontent.com/${{ github.actor }}/${{ secrets.GIST_ID }}/raw/pjtv.m3u
+          curl -L \
+            -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+            -o pjtv.m3u \
+            https://gist.githubusercontent.com/${{ github.actor }}/${{ secrets.GIST_ID }}/raw/pjtv.m3u
 
           if [ ! -s pjtv.m3u ]; then
             echo "❌ Failed to download pjtv.m3u"
@@ -56,15 +57,22 @@ jobs:
         run: |
           set -e
 
-          CONTENT=$(jq -Rs . < pjtv.m3u)
+          # Create JSON payload safely (avoids ARG_MAX error)
+          jq -n --arg content "$(cat pjtv.m3u)" \
+            '{files: {"pjtv.m3u": {content: $content}}}' > payload.json
 
-          curl -X PATCH https://api.github.com/gists/${{ secrets.GIST_ID }} \
+          # Send PATCH request
+          curl -s -X PATCH https://api.github.com/gists/${{ secrets.GIST_ID }} \
             -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"files\": {
-                \"pjtv.m3u\": {
-                  \"content\": $CONTENT
-                }
-              }
-            }"
+            --data @payload.json \
+            | tee response.json
+
+          # Verify success
+          if grep -q '"files"' response.json; then
+            echo "✅ Gist updated successfully"
+          else
+            echo "❌ Gist update failed"
+            cat response.json
+            exit 1
+          fi
