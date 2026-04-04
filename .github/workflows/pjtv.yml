@@ -1,4 +1,4 @@
-name: Auto Update JioTV Cookie
+name: Auto Update JioTV Cookie gist
 
 on:
   schedule:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (for runtime only)
+      - name: Checkout (runtime only)
         uses: actions/checkout@v4
 
       - name: Fetch cookie from API
@@ -35,40 +35,50 @@ jobs:
 
           curl -L \
             -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
-            -o pjtv.m3u \
+            -o pjtv_old.m3u \
             https://gist.githubusercontent.com/${{ github.actor }}/${{ secrets.GIST_ID }}/raw/pjtv.m3u
 
-          if [ ! -s pjtv.m3u ]; then
+          if [ ! -s pjtv_old.m3u ]; then
             echo "❌ Failed to download pjtv.m3u"
             exit 1
           fi
+
+          cp pjtv_old.m3u pjtv.m3u
 
       - name: Update cookie in pjtv.m3u
         run: |
           set -e
 
-          echo "🔁 Updating EXTHTTP cookies..."
           sed -i 's#"cookie":"__hdnea__=[^"]*"#"cookie":"'"$FULL_COOKIE"'"#g' pjtv.m3u
-
-          echo "🔁 Updating MPD URL hdnea token..."
           sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE_VALUE"'#g' pjtv.m3u
 
-      - name: Upload updated pjtv.m3u to Gist
+      - name: Check if file changed
+        id: diffcheck
         run: |
           set -e
 
-          # Create JSON payload safely (avoids ARG_MAX error)
-          jq -n --arg content "$(cat pjtv.m3u)" \
+          if cmp -s pjtv_old.m3u pjtv.m3u; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No changes detected, skipping upload"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "✅ बदलाव मिला, अपडेट करेंगे"
+          fi
+
+      - name: Upload updated pjtv.m3u to Gist
+        if: steps.diffcheck.outputs.changed == 'true'
+        run: |
+          set -e
+
+          jq -n --rawfile content pjtv.m3u \
             '{files: {"pjtv.m3u": {content: $content}}}' > payload.json
 
-          # Send PATCH request
           curl -s -X PATCH https://api.github.com/gists/${{ secrets.GIST_ID }} \
             -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
             -H "Content-Type: application/json" \
             --data @payload.json \
             | tee response.json
 
-          # Verify success
           if grep -q '"files"' response.json; then
             echo "✅ Gist updated successfully"
           else
