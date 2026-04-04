@@ -1,0 +1,70 @@
+name: Auto Update JioTV Cookie Gist
+
+on:
+  schedule:
+    - cron: '30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  update-cookie:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository (only for workflow runtime)
+        uses: actions/checkout@v4
+
+      - name: Fetch cookie from API
+        run: |
+          set -e
+
+          FULL_COOKIE=$(curl -fsSL "${{ secrets.COOKIE_API_URL }}" | jq -r '.[0].cookie')
+
+          if [ -z "$FULL_COOKIE" ] || [ "$FULL_COOKIE" = "null" ]; then
+            echo "❌ Cookie fetch failed"
+            exit 1
+          fi
+
+          COOKIE_VALUE="${FULL_COOKIE#__hdnea__=}"
+
+          echo "FULL_COOKIE=$FULL_COOKIE" >> $GITHUB_ENV
+          echo "COOKIE_VALUE=$COOKIE_VALUE" >> $GITHUB_ENV
+
+      - name: Download pjtv.m3u from Gist
+        run: |
+          set -e
+
+          curl -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+               -o pjtv.m3u \
+               https://gist.githubusercontent.com/${{ github.actor }}/${{ secrets.GIST_ID }}/raw/pjtv.m3u
+
+          if [ ! -s pjtv.m3u ]; then
+            echo "❌ Failed to download pjtv.m3u"
+            exit 1
+          fi
+
+      - name: Update cookie in pjtv.m3u
+        run: |
+          set -e
+
+          echo "🔁 Updating EXTHTTP cookies..."
+          sed -i 's#"cookie":"__hdnea__=[^"]*"#"cookie":"'"$FULL_COOKIE"'"#g' pjtv.m3u
+
+          echo "🔁 Updating MPD URL hdnea token..."
+          sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE_VALUE"'#g' pjtv.m3u
+
+      - name: Upload updated pjtv.m3u to Gist
+        run: |
+          set -e
+
+          CONTENT=$(jq -Rs . < pjtv.m3u)
+
+          curl -X PATCH https://api.github.com/gists/${{ secrets.GIST_ID }} \
+            -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"files\": {
+                \"pjtv.m3u\": {
+                  \"content\": $CONTENT
+                }
+              }
+            }"
