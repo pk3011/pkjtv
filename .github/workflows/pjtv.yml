@@ -83,7 +83,7 @@ jobs:
 
             echo "🔄 Refreshing $ID"
 
-            URL="${{ secrets.COOKIE_API_BASE }}?id=$ID"
+            URL="${{ secrets.COOKIE_API_URL }}?id=$ID"
             RESPONSE=$(curl -fsSL "$URL" || true)
 
             FULL_COOKIE=$(echo "$RESPONSE" | grep -o '__hdnea__=[^"]*' | head -n1)
