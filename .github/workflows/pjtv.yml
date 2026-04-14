@@ -2,7 +2,7 @@ name: Auto Update JioTV Cookie gist
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '15 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,6 +12,22 @@ jobs:
     steps:
       - name: Checkout (runtime only)
         uses: actions/checkout@v4
+
+      - name: Fetch cookie from API
+        run: |
+          set -e
+
+          FULL_COOKIE=$(curl -fsSL "${{ secrets.COOKIE_API_URL }}" | jq -r '.[0].cookie')
+
+          if [ -z "$FULL_COOKIE" ] || [ "$FULL_COOKIE" = "null" ]; then
+            echo "❌ Cookie fetch failed"
+            exit 1
+          fi
+
+          COOKIE_VALUE="${FULL_COOKIE#__hdnea__=}"
+
+          echo "FULL_COOKIE=$FULL_COOKIE" >> $GITHUB_ENV
+          echo "COOKIE_VALUE=$COOKIE_VALUE" >> $GITHUB_ENV
 
       - name: Download pjtv.m3u from Gist
         run: |
@@ -29,92 +45,12 @@ jobs:
 
           cp pjtv_old.m3u pjtv.m3u
 
-      - name: Extract tvg-id list
+      - name: Update cookie in pjtv.m3u
         run: |
           set -e
 
-          IDS=$(grep -o 'tvg-id="[0-9]\+"' pjtv.m3u | cut -d'"' -f2 | sort -u)
-
-          if [ -z "$IDS" ]; then
-            echo "❌ No tvg-id found"
-            exit 1
-          fi
-
-          echo "📺 Found IDs:"
-          echo "$IDS"
-
-          echo "IDS<<EOF" >> $GITHUB_ENV
-          echo "$IDS" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-      - name: Smart cookie update (skip valid cookies)
-        run: |
-          set -e
-
-          NOW=$(date +%s)
-          BUFFER=300   # 5 minutes buffer
-
-          cp pjtv.m3u updated.m3u
-
-          for ID in $IDS; do
-            echo "🔍 Checking tvg-id: $ID"
-
-            # Extract existing cookie from block
-            CURRENT_COOKIE=$(awk -v id="$ID" '
-              $0 ~ "tvg-id=\""id"\"" {
-                for(i=1;i<=6;i++){
-                  getline
-                  if ($0 ~ /__hdnea__=/) {
-                    match($0, /__hdnea__=[^"&]*/)
-                    print substr($0, RSTART, RLENGTH)
-                    exit
-                  }
-                }
-              }' pjtv.m3u)
-
-            EXP=$(echo "$CURRENT_COOKIE" | grep -o 'exp=[0-9]*' | cut -d= -f2)
-
-            if [ ! -z "$EXP" ]; then
-              if [ "$EXP" -gt $((NOW + BUFFER)) ]; then
-                echo "⏭️ Skipping $ID (cookie still valid)"
-                continue
-              fi
-            fi
-
-            echo "🔄 Refreshing $ID"
-
-            URL="${{ secrets.COOKIE_API_URL }}?id=$ID"
-            RESPONSE=$(curl -fsSL "$URL" || true)
-
-            FULL_COOKIE=$(echo "$RESPONSE" | grep -o '__hdnea__=[^"]*' | head -n1)
-
-            if [ -z "$FULL_COOKIE" ]; then
-              echo "⚠️ Failed to fetch cookie for $ID"
-              continue
-            fi
-
-            COOKIE_VALUE="${FULL_COOKIE#__hdnea__=}"
-
-            # Replace only within that channel block
-            awk -v id="$ID" -v fc="$FULL_COOKIE" -v cv="$COOKIE_VALUE" '
-            {
-              if ($0 ~ "tvg-id=\""id"\"") {
-                print $0
-                for(i=1;i<=6;i++){
-                  getline
-                  gsub(/"cookie":"__hdnea__=[^"]*"/, "\"cookie\":\""fc"\"")
-                  gsub(/__hdnea__=[^&"]*/, "__hdnea__="cv)
-                  print
-                }
-                next
-              }
-              print
-            }' updated.m3u > temp.m3u && mv temp.m3u updated.m3u
-
-            echo "✅ Updated $ID"
-          done
-
-          mv updated.m3u pjtv.m3u
+          sed -i 's#"cookie":"__hdnea__=[^"]*"#"cookie":"'"$FULL_COOKIE"'"#g' pjtv.m3u
+          sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE_VALUE"'#g' pjtv.m3u
 
       - name: Check if file changed
         id: diffcheck
@@ -123,10 +59,10 @@ jobs:
 
           if cmp -s pjtv_old.m3u pjtv.m3u; then
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ No changes detected"
+            echo "ℹ️ No changes detected, skipping upload"
           else
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "✅ Changes detected"
+            echo "✅ बदलाव मिला, अपडेट करेंगे"
           fi
 
       - name: Upload updated pjtv.m3u to Gist
