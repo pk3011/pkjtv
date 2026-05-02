@@ -1,88 +1,91 @@
-name: Auto Update JioTV Cookie gist
+name: Build PKJTV Playlist
 
 on:
   schedule:
-    - cron: '15 * * * *'
+    - cron: "0 */4 * * *"   # every 4 hours
   workflow_dispatch:
 
 jobs:
-  update-cookie:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (runtime only)
-        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-      - name: Fetch cookie from API
+      - name: Install requests
+        run: pip install requests
+
+      - name: Generate M3U + Prepare Gist JSON
+        env:
+          API_URL: ${{ secrets.API_URL }}
         run: |
-          set -e
+          python << 'EOF'
+          import requests, json, os
 
-          FULL_COOKIE=$(curl -fsSL "${{ secrets.COOKIE_API_URL }}" | jq -r '.[0].cookie')
+          API_URL = os.environ["API_URL"]
+          OUTPUT_FILE = "pkjtv.m3u"
 
-          if [ -z "$FULL_COOKIE" ] || [ "$FULL_COOKIE" = "null" ]; then
-            echo "❌ Cookie fetch failed"
-            exit 1
-          fi
+          headers = {
+              "User-Agent": "JioTV.Plus/2.3.1_2041 (Linux;Android 14) ExoPlayerLib/2.18.1"
+          }
 
-          COOKIE_VALUE="${FULL_COOKIE#__hdnea__=}"
+          res = requests.get(API_URL, headers=headers, timeout=20)
+          res.raise_for_status()
+          data = res.json()
 
-          echo "FULL_COOKIE=$FULL_COOKIE" >> $GITHUB_ENV
-          echo "COOKIE_VALUE=$COOKIE_VALUE" >> $GITHUB_ENV
+          lines = ["#EXTM3U"]
 
-      - name: Download pjtv.m3u from Gist
+          for cid, ch in data.items():
+              name = ch.get("channelName", "Unknown")
+              logo = ch.get("logo", "")
+              genre = ch.get("genre", ["Unknown"])[0]
+              mpd = ch.get("dashWidewinePlayUrl", "")
+              keyid = ch.get("keyid", "")
+              key = ch.get("key", "")
+
+              if not mpd or not keyid or not key:
+                  continue
+
+              lines.append(f'#EXTINF:-1 tvg-id="{cid}" tvg-logo="{logo}" group-title="{genre}",{name}')
+              lines.append("#KODIPROP:inputstream.adaptive.license_type=org.w3.clearkey")
+              lines.append(f"#KODIPROP:inputstream.adaptive.license_key={keyid}:{key}")
+              lines.append("#KODIPROP:inputstream.adaptive.manifest_type=mpd")
+              lines.append("#EXTVLCOPT:http-user-agent=JioTV.Plus/2.3.1_2041 (Linux;Android 14) ExoPlayerLib/2.18.1")
+              lines.append(mpd)
+              lines.append("")
+
+          m3u_content = "\n".join(lines)
+
+          # Save file
+          with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+              f.write(m3u_content)
+
+          # Prepare gist payload
+          gist_payload = {
+              "description": "Auto-updated PKJTV playlist",
+              "public": False,
+              "files": {
+                  "pkjtv.m3u": {
+                      "content": m3u_content
+                  }
+              }
+          }
+
+          with open("gist.json", "w", encoding="utf-8") as f:
+              json.dump(gist_payload, f)
+
+          print("M3U generated successfully")
+          EOF
+
+      - name: Upload to Gist
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          set -e
-
-          curl -L \
-            -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
-            -o pjtv_old.m3u \
-            https://gist.githubusercontent.com/${{ github.actor }}/${{ secrets.GIST_ID }}/raw/pjtv.m3u
-
-          if [ ! -s pjtv_old.m3u ]; then
-            echo "❌ Failed to download pjtv.m3u"
-            exit 1
-          fi
-
-          cp pjtv_old.m3u pjtv.m3u
-
-      - name: Update cookie in pjtv.m3u
-        run: |
-          set -e
-
-          sed -i 's#"cookie":"__hdnea__=[^"]*"#"cookie":"'"$FULL_COOKIE"'"#g' pjtv.m3u
-          sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE_VALUE"'#g' pjtv.m3u
-
-      - name: Check if file changed
-        id: diffcheck
-        run: |
-          set -e
-
-          if cmp -s pjtv_old.m3u pjtv.m3u; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ No changes detected, skipping upload"
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "✅ बदलाव मिला, अपडेट करेंगे"
-          fi
-
-      - name: Upload updated pjtv.m3u to Gist
-        if: steps.diffcheck.outputs.changed == 'true'
-        run: |
-          set -e
-
-          jq -n --rawfile content pjtv.m3u \
-            '{files: {"pjtv.m3u": {content: $content}}}' > payload.json
-
-          curl -s -X PATCH https://api.github.com/gists/${{ secrets.GIST_ID }} \
-            -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            --data @payload.json \
-            | tee response.json
-
-          if grep -q '"files"' response.json; then
-            echo "✅ Gist updated successfully"
-          else
-            echo "❌ Gist update failed"
-            cat response.json
-            exit 1
-          fi
+          curl -X PATCH "https://api.github.com/gists/$GIST_ID" \
+          -H "Authorization: token $GH_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d @gist.json
