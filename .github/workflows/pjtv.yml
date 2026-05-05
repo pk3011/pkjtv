@@ -10,7 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository (only for workflow runtime)
+      # ✅ Checkout (only needed for runtime)
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       # ✅ Step 1: Fetch cookie
@@ -45,7 +46,7 @@ jobs:
             exit 1
           fi
 
-      # ✅ Step 3: Update cookie inside file
+      # ✅ Step 3: Update cookie
       - name: Update cookie in pjtv.m3u
         run: |
           set -e
@@ -56,20 +57,15 @@ jobs:
           echo "🔁 Updating MPD URL hdnea token..."
           sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE_VALUE"'#g' pjtv.m3u
 
-      # ✅ Step 4: Upload back to Gist (FIXED)
+      # ✅ Step 4: Upload back to Gist (FINAL FIX)
       - name: Upload updated pjtv.m3u to Gist
         run: |
           set -e
 
-          echo "📦 Preparing JSON payload..."
+          echo "📦 Preparing JSON payload (safe streaming)..."
 
-          jq -n --arg content "$(cat pjtv.m3u)" '{
-            files: {
-              "pjtv.m3u": {
-                content: $content
-              }
-            }
-          }' > payload.json
+          # 🔥 NO shell expansion → NO argument limit
+          jq -Rs '{files: {"pjtv.m3u": {content: .}}}' pjtv.m3u > payload.json
 
           echo "🚀 Uploading to Gist..."
 
