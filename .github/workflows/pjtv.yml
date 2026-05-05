@@ -1,113 +1,152 @@
-name: Build PKJTV Playlist
+name: Auto Update JioTV Cookie gist
 
 on:
   schedule:
-    - cron: "0 */2 * * *"
+    - cron: '0 */2 * * *'
   workflow_dispatch:
 
 jobs:
-  build:
+  update-cookie:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Checkout (runtime only)
+        uses: actions/checkout@v4
 
-      - name: Install requests
-        run: pip install requests
-
-      - name: Generate M3U + Prepare Gist JSON
-        env:
-          API_URL: ${{ secrets.API_URL }}
+      - name: Download pjtv.m3u from Gist
         run: |
-          python << 'EOF'
-          import requests, json, os, urllib.parse
+          set -e
 
-          API_URL = os.environ["API_URL"]
-          OUTPUT_FILE = "pkjtv.m3u"
+          curl -L \
+            -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+            -o pjtv_old.m3u \
+            https://gist.githubusercontent.com/${{ github.actor }}/${{ secrets.GIST_ID }}/raw/pjtv.m3u
 
-          headers = {
-              "User-Agent": "JioTV.Plus/2.3.1_2041 (Linux;Android 14) ExoPlayerLib/2.18.1"
-          }
+          if [ ! -s pjtv_old.m3u ]; then
+            echo "❌ Failed to download pjtv.m3u"
+            exit 1
+          fi
 
-          def extract_hdnea(url):
-              try:
-                  parsed = urllib.parse.urlparse(url)
-                  query = urllib.parse.parse_qs(parsed.query)
-                  return query.get("__hdnea__", [""])[0]
-              except:
-                  return ""
+          cp pjtv_old.m3u pjtv.m3u
 
-          res = requests.get(API_URL, headers=headers, timeout=20)
-          res.raise_for_status()
-          data = res.json()
+      - name: Extract tvg-id list
+        run: |
+          set -e
 
-          lines = ["#EXTM3U"]
+          IDS=$(grep -o 'tvg-id="[0-9]\+"' pjtv.m3u | cut -d'"' -f2 | sort -u)
 
-          for cid, ch in data.items():
-              name = ch.get("channelName", "Unknown")
-              logo = ch.get("logo", "")
-              genre = ch.get("genre", ["Unknown"])[0]
-              mpd = ch.get("dashWidewinePlayUrl", "")
-              keyid = ch.get("keyid", "")
-              key = ch.get("key", "")
+          if [ -z "$IDS" ]; then
+            echo "❌ No tvg-id found"
+            exit 1
+          fi
 
-              if not mpd or not keyid or not key:
-                  continue
+          echo "📺 Found IDs:"
+          echo "$IDS"
 
-              cookie = extract_hdnea(mpd)
+          echo "IDS<<EOF" >> $GITHUB_ENV
+          echo "$IDS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
-              lines.append(f'#EXTINF:-1 tvg-id="{cid}" tvg-logo="{logo}" group-title="{genre}",{name}')
-              lines.append("#KODIPROP:inputstream.adaptive.license_type=org.w3.clearkey")
-              lines.append(f"#KODIPROP:inputstream.adaptive.license_key={keyid}:{key}")
-              lines.append("#KODIPROP:inputstream.adaptive.manifest_type=mpd")
+      - name: Smart cookie update (skip valid cookies)
+        run: |
+          set -e
 
-              # ✅ Add EXTHTTP cookie line
-              if cookie:
-                  lines.append(f'#EXTHTTP:{{"cookie":"__hdnea__={cookie}"}}')
+          NOW=$(date +%s)
+          BUFFER=300   # 5 minutes buffer
 
-              lines.append("#EXTVLCOPT:http-user-agent=JioTV.Plus/2.3.1_2041 (Linux;Android 14) ExoPlayerLib/2.18.1")
-              lines.append(mpd)
-              lines.append("")
+          cp pjtv.m3u updated.m3u
 
-          m3u_content = "\n".join(lines)
+          for ID in $IDS; do
+            echo "🔍 Checking tvg-id: $ID"
 
-          with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-              f.write(m3u_content)
-
-          gist_payload = {
-              "description": "Auto-updated PKJTV playlist",
-              "public": False,
-              "files": {
-                  "pkjtv.m3u": {
-                      "content": m3u_content
+            # Extract existing cookie from block
+            CURRENT_COOKIE=$(awk -v id="$ID" '
+              $0 ~ "tvg-id=\""id"\"" {
+                for(i=1;i<=6;i++){
+                  getline
+                  if ($0 ~ /__hdnea__=/) {
+                    match($0, /__hdnea__=[^"&]*/)
+                    print substr($0, RSTART, RLENGTH)
+                    exit
                   }
+                }
+              }' pjtv.m3u)
+
+            EXP=$(echo "$CURRENT_COOKIE" | grep -o 'exp=[0-9]*' | cut -d= -f2)
+
+            if [ ! -z "$EXP" ]; then
+              if [ "$EXP" -gt $((NOW + BUFFER)) ]; then
+                echo "⏭️ Skipping $ID (cookie still valid)"
+                continue
+              fi
+            fi
+
+            echo "🔄 Refreshing $ID"
+
+            URL="${{ secrets.COOKIE_API_URL }}?id=$ID"
+            RESPONSE=$(curl -fsSL "$URL" || true)
+
+            FULL_COOKIE=$(echo "$RESPONSE" | grep -o '__hdnea__=[^"]*' | head -n1)
+
+            if [ -z "$FULL_COOKIE" ]; then
+              echo "⚠️ Failed to fetch cookie for $ID"
+              continue
+            fi
+
+            COOKIE_VALUE="${FULL_COOKIE#__hdnea__=}"
+
+            # Replace only within that channel block
+            awk -v id="$ID" -v fc="$FULL_COOKIE" -v cv="$COOKIE_VALUE" '
+            {
+              if ($0 ~ "tvg-id=\""id"\"") {
+                print $0
+                for(i=1;i<=6;i++){
+                  getline
+                  gsub(/"cookie":"__hdnea__=[^"]*"/, "\"cookie\":\""fc"\"")
+                  gsub(/__hdnea__=[^&"]*/, "__hdnea__="cv)
+                  print
+                }
+                next
               }
-          }
+              print
+            }' updated.m3u > temp.m3u && mv temp.m3u updated.m3u
 
-          with open("gist.json", "w", encoding="utf-8") as f:
-              json.dump(gist_payload, f)
+            echo "✅ Updated $ID"
+          done
 
-          print("M3U generated with fresh cookie successfully")
-          EOF
+          mv updated.m3u pjtv.m3u
 
-      - name: Upload to Gist
-        env:
-          GIST_ID: ${{ secrets.GIST_ID }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Check if file changed
+        id: diffcheck
         run: |
-          curl -X PATCH "https://api.github.com/gists/$GIST_ID" \
-          -H "Authorization: token $GH_TOKEN" \
-          -H "Content-Type: application/json" \
-          -d @gist.json
-      - name: Upload to Gist
-        env:
-          GIST_ID: ${{ secrets.GIST_ID }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          set -e
+
+          if cmp -s pjtv_old.m3u pjtv.m3u; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No changes detected"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "✅ Changes detected"
+          fi
+
+      - name: Upload updated pjtv.m3u to Gist
+        if: steps.diffcheck.outputs.changed == 'true'
         run: |
-          curl -X PATCH "https://api.github.com/gists/$GIST_ID" \
-          -H "Authorization: token $GH_TOKEN" \
-          -H "Content-Type: application/json" \
-          -d @gist.json
+          set -e
+
+          jq -n --rawfile content pjtv.m3u \
+            '{files: {"pjtv.m3u": {content: $content}}}' > payload.json
+
+          curl -s -X PATCH https://api.github.com/gists/${{ secrets.GIST_ID }} \
+            -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --data @payload.json \
+            | tee response.json
+
+          if grep -q '"files"' response.json; then
+            echo "✅ Gist updated successfully"
+          else
+            echo "❌ Gist update failed"
+            cat response.json
+            exit 1
+          fi
