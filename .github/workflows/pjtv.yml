@@ -13,6 +13,7 @@ jobs:
       - name: Checkout repository (only for workflow runtime)
         uses: actions/checkout@v4
 
+      # ✅ Step 1: Fetch cookie
       - name: Fetch cookie from API
         run: |
           set -e
@@ -29,19 +30,22 @@ jobs:
           echo "FULL_COOKIE=$FULL_COOKIE" >> $GITHUB_ENV
           echo "COOKIE_VALUE=$COOKIE_VALUE" >> $GITHUB_ENV
 
+      # ✅ Step 2: Download M3U from Gist
       - name: Download pjtv.m3u from Gist
         run: |
           set -e
 
-          curl -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
-               -o pjtv.m3u \
-               https://gist.githubusercontent.com/${{ github.actor }}/${{ secrets.GIST_ID }}/raw/pjtv.m3u
+          curl -fsSL \
+            -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+            -o pjtv.m3u \
+            https://gist.githubusercontent.com/${{ github.actor }}/${{ secrets.GIST_ID }}/raw/pjtv.m3u
 
           if [ ! -s pjtv.m3u ]; then
             echo "❌ Failed to download pjtv.m3u"
             exit 1
           fi
 
+      # ✅ Step 3: Update cookie inside file
       - name: Update cookie in pjtv.m3u
         run: |
           set -e
@@ -52,19 +56,26 @@ jobs:
           echo "🔁 Updating MPD URL hdnea token..."
           sed -i 's#__hdnea__=[^&"]*#__hdnea__='"$COOKIE_VALUE"'#g' pjtv.m3u
 
+      # ✅ Step 4: Upload back to Gist (FIXED)
       - name: Upload updated pjtv.m3u to Gist
         run: |
           set -e
 
-          CONTENT=$(jq -Rs . < pjtv.m3u)
+          echo "📦 Preparing JSON payload..."
 
-          curl -X PATCH https://api.github.com/gists/${{ secrets.GIST_ID }} \
+          jq -n --arg content "$(cat pjtv.m3u)" '{
+            files: {
+              "pjtv.m3u": {
+                content: $content
+              }
+            }
+          }' > payload.json
+
+          echo "🚀 Uploading to Gist..."
+
+          curl -fsSL -X PATCH https://api.github.com/gists/${{ secrets.GIST_ID }} \
             -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"files\": {
-                \"pjtv.m3u\": {
-                  \"content\": $CONTENT
-                }
-              }
-            }"
+            --data @payload.json
+
+          echo "✅ Gist updated successfully"
